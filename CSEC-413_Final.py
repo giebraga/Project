@@ -8,7 +8,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
 import scipy.stats as stats
 
 class ModelingSimulationApp:
