@@ -68,11 +68,21 @@ class ModelingSimulationApp:
         st.sidebar.header("Data Generation Parameters")
         
         # Feature configuration
-        features = st.sidebar.multiselect(
-            "Select Features", 
+        predefined_features = st.sidebar.multiselect(
+            "Select Predefined Features", 
             ["Temperature", "Pressure", "Humidity", "Wind Speed", "Altitude"],
             default=["Temperature", "Pressure", "Humidity"]
         )
+        
+        # Allow user to define custom features
+        custom_features = st.sidebar.text_area(
+            "Define Custom Features (comma-separated)", 
+            help="Enter custom feature names, e.g., 'Solar Radiation, Soil Moisture'"
+        )
+        custom_features = [feature.strip() for feature in custom_features.split(",") if feature.strip()]
+        
+        # Combine predefined and custom features
+        features = predefined_features + custom_features
         
         # Sample size selection
         n_samples = st.sidebar.slider(
@@ -121,79 +131,49 @@ class ModelingSimulationApp:
     # Create base data
         data = pd.DataFrame()
     
-    # Generate correlated features with proper ordering
-    # First generate altitude and temperature as base features
-        if "Altitude" in features:
-            # More realistic altitude distribution using gamma
-            data["Altitude"] = np.random.gamma(5, 100, n_samples)  # Generates realistic elevation profiles
-    
-        if "Temperature" in features:
-            # Base temperature at sea level
-            base_temp = np.random.normal(25, 5, n_samples)
-            if "Altitude" in features:
-                # Temperature decreases with altitude (lapse rate: ~6.5°C per 1000m)
-                data["Temperature"] = base_temp - (data["Altitude"] * 0.0065)
+        # Generate predefined features
+        for feature in features:
+            if feature == "Altitude":
+                data["Altitude"] = np.random.gamma(5, 100, n_samples)
+            elif feature == "Temperature":
+                base_temp = np.random.normal(25, 5, n_samples)
+                if "Altitude" in data.columns:
+                    data["Temperature"] = base_temp - (data["Altitude"] * 0.0065)
+                else:
+                    data["Temperature"] = base_temp
+            elif feature == "Pressure":
+                if "Altitude" in data.columns:
+                    standard_pressure = 1013.25
+                    data["Pressure"] = standard_pressure * np.exp(-0.0001 * data["Altitude"])
+                    data["Pressure"] += np.random.normal(0, 20, n_samples)
+                else:
+                    data["Pressure"] = np.random.normal(1000, 50, n_samples)
+            elif feature == "Humidity":
+                if "Temperature" in data.columns:
+                    data["Humidity"] = np.clip(100 - (data["Temperature"] * 2) + 
+                                        np.random.normal(50, 10, n_samples), 0, 100)
+                else:
+                    data["Humidity"] = np.clip(np.random.normal(60, 15, n_samples), 0, 100)
+            elif feature == "Wind Speed":
+                base_wind = np.abs(np.random.normal(5, 2, n_samples))
+                if "Altitude" in data.columns:
+                    altitude_factor = 0.005 * data["Altitude"]
+                    base_wind += altitude_factor
+                data["Wind Speed"] = np.clip(base_wind, 0, 30)
             else:
-                data["Temperature"] = base_temp
-
-        if "Pressure" in features:
-            if "Altitude" in features:
-                # Standard atmospheric pressure equation
-                standard_pressure = 1013.25  # sea level pressure in hPa
-                data["Pressure"] = standard_pressure * np.exp(-0.0001 * data["Altitude"])
-                # Add some random variation
-                data["Pressure"] += np.random.normal(0, 20, n_samples)
-            else:
-                data["Pressure"] = data["Temperature"] * 0.5 + np.random.normal(1000, 50, n_samples)
-
-        if "Humidity" in features:
-            if "Temperature" in features:
-                # Humidity inversely correlates with temperature
-                data["Humidity"] = np.clip(100 - (data["Temperature"] * 2) + 
-                                     np.random.normal(50, 10, n_samples), 0, 100)
-            else:
-                data["Humidity"] = np.clip(np.random.normal(60, 15, n_samples), 0, 100)
-
-        if "Wind Speed" in features:
-            # Base wind speed
-            base_wind = np.abs(np.random.normal(5, 2, n_samples))
+                # Generate random data for custom features
+                data[feature] = np.random.normal(0, 1, n_samples)
         
-            if "Altitude" in features:
-                # Wind speed increases with altitude
-                altitude_factor = 0.005 * data["Altitude"]
-                base_wind += altitude_factor
-        
-            if "Pressure" in features:
-                # Wind speed affected by pressure gradients
-                pressure_gradient = np.gradient(data["Pressure"])
-                base_wind += np.abs(pressure_gradient) * 0.1
-        
-            # Clip wind speed to realistic values
-            data["Wind Speed"] = np.clip(base_wind, 0, 30)  # Maximum 30 m/s is a reasonable limit
-
         # Create target variable with realistic relationships
         if len(features) > 0:
             target = np.zeros(n_samples)
-        
-            # Define feature weights for target
-            weights = {
-                'Temperature': 0.3,
-                'Pressure': 0.2,
-                'Humidity': 0.15,
-                'Wind Speed': 0.15,
-                'Altitude': 0.2
-            }
-        
-            # Calculate target using available features
+            weights = {feature: 1/len(features) for feature in features}
             for feature in features:
-                if feature in weights:
-                    # Normalize the feature
+                if feature in data.columns:
                     normalized_feature = (data[feature] - data[feature].mean()) / data[feature].std()
                     target += weights[feature] * normalized_feature
-        
-            # Add noise to target
             data['Target'] = target + np.random.normal(0, noise_level, n_samples)
-    
+        
         return data
     
     def exploratory_analysis_page(self):
