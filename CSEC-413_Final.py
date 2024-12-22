@@ -214,98 +214,60 @@ class ModelingSimulationApp:
     
     def modeling_page(self):
         """
-        Modeling and simulation section with multiple modeling techniques
+        Modeling and simulation section
         """
         st.header("🤖 Modeling and Simulation")
-
+        
         # Check if data is generated
         if st.session_state.generated_data is None:
             st.warning("Please generate data first in the Data Generation page.")
             return
-
+        
         data = st.session_state.generated_data
-
-        # Select the target variable type (numeric or categorical)
-        st.subheader("Model Configuration")
-        problem_type = st.selectbox(
-            "Select Problem Type",
-            ["Regression", "Classification"],
-            help="Choose the type of modeling based on your target variable."
-        )
-
+        
         # Prepare data for modeling
         X = data.drop('Target', axis=1)
         y = data['Target']
         
-        if problem_type == "Classification":
-            y = pd.cut(y, bins=3, labels=["Low", "Medium", "High"])  # Example: Discretize target into categories
-
         # Train-test split
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
-
-        # Scale the features (for numerical variables)
+        
+        # Scale the features
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
-
-        # Model selection
-        model_choice = st.selectbox(
-            "Select Modeling Technique",
-            ["Random Forest", "Linear Regression", "Logistic Regression"],
-            help="Choose a modeling technique suitable for the selected problem type."
-        )
-
-        if model_choice == "Random Forest":
-            model = RandomForestRegressor(n_estimators=100, random_state=42) if problem_type == "Regression" else RandomForestClassifier(n_estimators=100, random_state=42)
-        elif model_choice == "Linear Regression":
-            model = LinearRegression()
-        elif model_choice == "Logistic Regression":
-            model = LogisticRegression(max_iter=1000)
-        else:
-            st.error("Invalid model choice. Please select a valid option.")
-            return
-
-        # Train the selected model
-        model.fit(X_train_scaled, y_train)
-
-        # Make predictions
-        y_pred = model.predict(X_test_scaled)
-
-        # Display results based on problem type
+        
+        # Train Random Forest Regressor
+        rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+        rf_model.fit(X_train_scaled, y_train)
+        
+        # Predictions
+        y_pred = rf_model.predict(X_test_scaled)
+        
+        # Model evaluation
         st.subheader("Model Performance")
-        if problem_type == "Regression":
-            mse = mean_squared_error(y_test, y_pred)
-            r2 = r2_score(y_test, y_pred)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Mean Squared Error", f"{mse:.4f}")
-            with col2:
-                st.metric("R² Score", f"{r2:.4f}")
-        elif problem_type == "Classification":
-            accuracy = np.mean(y_test == y_pred)
-            st.metric("Accuracy", f"{accuracy:.4%}")
-
-            # Confusion matrix
-            st.subheader("Confusion Matrix")
-            conf_matrix = pd.crosstab(y_test, y_pred, rownames=['Actual'], colnames=['Predicted'])
-            st.dataframe(conf_matrix)
-
-        # Feature importance for Random Forest
-        if model_choice == "Random Forest" and problem_type == "Regression":
-            st.subheader("Feature Importance")
-            feature_importance = pd.DataFrame({
-                'feature': X.columns,
-                'importance': model.feature_importances_
-            }).sort_values('importance', ascending=False)
-
-            plt.figure(figsize=(10, 6))
-            sns.barplot(x='importance', y='feature', data=feature_importance)
-            plt.title('Feature Importance in Predictive Model')
-            st.pyplot(plt)
-
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Mean Squared Error", f"{mse:.4f}")
+        with col2:
+            st.metric("R² Score", f"{r2:.4f}")
+        
+        # Feature importance
+        st.subheader("Feature Importance")
+        feature_importance = pd.DataFrame({
+            'feature': X.columns,
+            'importance': rf_model.feature_importances_
+        }).sort_values('importance', ascending=False)
+        
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x='importance', y='feature', data=feature_importance)
+        plt.title('Feature Importance in Predictive Model')
+        st.pyplot(plt)
     
     def simulation_page(self):
         """
