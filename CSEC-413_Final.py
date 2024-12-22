@@ -290,79 +290,72 @@ class ModelingSimulationApp:
     def simulation_page(self):
         """
         Enhanced simulation and scenario analysis page with interactive features
-        and detailed results visualization
+        and detailed results visualization, applying the selected modeling technique.
         """
         st.header("🔮 Scenario Simulation")
-    
+        
         # Check if data is generated
         if st.session_state.generated_data is None:
             st.warning("Please generate data first in the Data Generation page.")
             return
-    
+        
         data = st.session_state.generated_data
-    
-        # Prepare data
+        
+        # Prepare data for modeling
         X = data.drop('Target', axis=1)
         y = data['Target']
-    
-        # Train model with cross-validation
-        st.subheader("Model Configuration")
-        col1, col2 = st.columns(2)
-        with col1:
-            test_size = st.slider("Test Set Size (%)", 
-                                min_value=10, 
-                                max_value=40, 
-                                value=20, 
-                                help="Percentage of data used for testing")
         
-        with col2:
-            n_estimators = st.slider("Number of Trees", 
-                                   min_value=50, 
-                                   max_value=500, 
-                                   value=100, 
-                                   step=50,
-                                   help="Number of trees in Random Forest")
-    
-        # Split and train
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, 
-            test_size=test_size/100, 
-            random_state=42
+        # Model selection
+        st.subheader("Select a Modeling Technique for Simulation")
+        model_choice = st.selectbox(
+            "Choose a model:",
+            ["Random Forest Regressor", "Linear Regression", "Support Vector Machine"]
         )
-    
-        # Scale features
+        
+        # Train-test split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        # Scale the features
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
-    
-        # Train model
-        rf_model = RandomForestRegressor(
-            n_estimators=n_estimators, 
-            random_state=42
-        )
-        rf_model.fit(X_train_scaled, y_train)
-    
+        
+        # Initialize the selected model
+        if model_choice == "Random Forest Regressor":
+            model = RandomForestRegressor(n_estimators=100, random_state=42)
+        elif model_choice == "Linear Regression":
+            from sklearn.linear_model import LinearRegression
+            model = LinearRegression()
+        elif model_choice == "Support Vector Machine":
+            from sklearn.svm import SVR
+            model = SVR()
+        
+        # Fit the model to the data
+        model.fit(X_train_scaled, y_train)
+        
         # Scenario simulation section
         st.subheader("What-If Scenario Analysis")
-    
+        
         # Create tabs for different simulation modes
         tab1, tab2 = st.tabs(["Single Scenario", "Comparison"])
-    
+        
         with tab1:
             # Single scenario analysis
             st.markdown("Adjust individual feature values to see their impact on the target variable.")
-        
+            
             # Base scenario
             scenario_data = pd.DataFrame(columns=X.columns)
             scenario_data.loc[0] = X.mean()
-        
+            
             # Feature selection and adjustment
             selected_features = st.multiselect(
                 "Select features to modify",
                 X.columns.tolist(),
                 default=[X.columns[0]]
             )
-        
+            
             # Create sliders for selected features
             for feature in selected_features:
                 min_val = float(X[feature].min())
@@ -376,18 +369,18 @@ class ModelingSimulationApp:
                     value=mean_val,
                     help=f"Range: [{min_val:.2f}, {max_val:.2f}], Mean: {mean_val:.2f}"
                 )
-        
+            
             # Make prediction
             scenario_scaled = scaler.transform(scenario_data)
-            prediction = rf_model.predict(scenario_scaled)[0]
-        
+            prediction = model.predict(scenario_scaled)[0]
+            
             # Display results
             st.subheader("Prediction Results")
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Predicted Value", f"{prediction:.2f}")
             with col2:
-                baseline = rf_model.predict(scaler.transform(pd.DataFrame([X.mean()])))[0]
+                baseline = model.predict(scaler.transform(pd.DataFrame([X.mean()])))[0]
                 st.metric("Baseline Prediction", f"{baseline:.2f}")
             with col3:
                 change = ((prediction - baseline) / baseline) * 100
@@ -396,30 +389,30 @@ class ModelingSimulationApp:
         with tab2:
             # Comparison analysis
             st.markdown("Compare multiple scenarios side by side.")
-        
+            
             n_scenarios = st.number_input(
                 "Number of scenarios to compare",
                 min_value=2,
                 max_value=4,
                 value=2
             )
-        
+            
             scenarios = []
             predictions = []
-        
+            
             # Create multiple scenarios
             cols = st.columns(n_scenarios)
             for i, col in enumerate(cols):
                 with col:
                     st.markdown(f"**Scenario {i+1}**")
                     scenario = X.mean().copy()
-                
+                    
                     # Allow adjusting each feature
                     for feature in X.columns:
                         min_val = float(X[feature].min())
                         max_val = float(X[feature].max())
                         mean_val = float(X[feature].mean())
-                    
+                        
                         scenario[feature] = st.slider(
                             f"{feature} (S{i+1})",
                             min_value=min_val,
@@ -427,19 +420,19 @@ class ModelingSimulationApp:
                             value=mean_val,
                             key=f"scenario_{i}_{feature}"
                         )
-                
+                    
                     scenarios.append(scenario)
                     # Make prediction for this scenario
-                    pred = rf_model.predict(scaler.transform([scenario]))[0]
+                    pred = model.predict(scaler.transform([scenario]))[0]
                     predictions.append(pred)
-        
+            
             # Display comparison results
             st.subheader("Scenario Comparison")
             comparison_df = pd.DataFrame({
                 f"Scenario {i+1}": [pred] for i, pred in enumerate(predictions)
             }, index=['Predicted Value'])
             st.dataframe(comparison_df.style.highlight_max(axis=1))
-        
+            
             # Visualization of scenario comparison
             fig, ax = plt.subplots(figsize=(10, 6))
             scenarios_df = pd.DataFrame(scenarios, columns=X.columns)
@@ -448,12 +441,13 @@ class ModelingSimulationApp:
             sns.heatmap(scenarios_df, center=0, cmap='coolwarm', annot=True, fmt='.2f')
             plt.title('Feature Values Comparison (Standardized)')
             st.pyplot(fig)
-
+        
         # Add feature importance reminder
-        st.info("""
+        st.info(""" 
         💡 **Tip**: Remember to consider feature importance when adjusting values. 
         Features with higher importance will have a stronger impact on the prediction.
         """)
+
     
     def conclusion_page(self):
         """
