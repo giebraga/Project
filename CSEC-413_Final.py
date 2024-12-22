@@ -216,7 +216,7 @@ class ModelingSimulationApp:
     
     def modeling_page(self):
         """
-        Modeling and simulation section with selectable modeling techniques.
+        Modeling and simulation section with selectable modeling techniques and system simulation.
         """
         st.header("🤖 Modeling and Simulation")
         
@@ -284,6 +284,57 @@ class ModelingSimulationApp:
             sns.barplot(x='importance', y='feature', data=feature_importance)
             plt.title('Feature Importance in Predictive Model')
             st.pyplot(plt)
+        
+        # Simulate the behavior of the system
+        st.subheader("Simulate System Behavior")
+        
+        # Allow users to adjust the simulation parameters
+        n_simulations = st.slider(
+            "Number of Simulations", 
+            min_value=10, 
+            max_value=1000, 
+            value=100, 
+            help="Number of simulated outcomes to generate"
+        )
+        
+        # Simulate new data points based on the trained model
+        simulated_data = np.random.normal(
+            loc=X.mean(), 
+            scale=X.std(), 
+            size=(n_simulations, X.shape[1])
+        )
+        
+        # Scale the simulated data
+        simulated_data_scaled = scaler.transform(simulated_data)
+        
+        # Generate predictions for the simulated data
+        simulated_predictions = model.predict(simulated_data_scaled)
+        
+        # Display simulation results
+        st.subheader("Simulation Results")
+        st.write(f"Simulated {n_simulations} outcomes based on the model.")
+        
+        # Display the first few simulated predictions
+        st.write("First few simulated outcomes:")
+        st.dataframe(pd.DataFrame(simulated_predictions, columns=["Simulated Outcome"]).head())
+        
+        # Visualize the distribution of simulated outcomes
+        st.subheader("Distribution of Simulated Outcomes")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.histplot(simulated_predictions, kde=True, ax=ax)
+        ax.set_title("Distribution of Simulated Outcomes")
+        st.pyplot(fig)
+        
+        # Compare with baseline prediction
+        baseline_prediction = model.predict(scaler.transform([X.mean()]))[0]
+        st.metric("Baseline Prediction", f"{baseline_prediction:.2f}")
+        
+        # Calculate and display percentage change from baseline
+        avg_simulation_result = np.mean(simulated_predictions)
+        change_from_baseline = ((avg_simulation_result - baseline_prediction) / baseline_prediction) * 100
+        st.metric("Average Simulated Outcome", f"{avg_simulation_result:.2f}")
+        st.metric("% Change from Baseline", f"{change_from_baseline:.1f}%")
+
 
 
     
