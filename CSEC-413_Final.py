@@ -448,6 +448,117 @@ class ModelingSimulationApp:
         Features with higher importance will have a stronger impact on the prediction.
         """)
 
+
+    def evaluate_model_performance(self):
+        """
+        Evaluate the performance of the model by comparing simulated outcomes with original data.
+        """
+        st.header("📊 Model Performance Evaluation")
+        
+        # Check if data is generated
+        if st.session_state.generated_data is None:
+            st.warning("Please generate data first in the Data Generation page.")
+            return
+        
+        data = st.session_state.generated_data
+        
+        # Prepare data for modeling
+        X = data.drop('Target', axis=1)
+        y = data['Target']
+        
+        # Train-test split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        # Scale the features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Select a model
+        st.subheader("Select a Modeling Technique for Evaluation")
+        model_choice = st.selectbox(
+            "Choose a model:",
+            ["Random Forest Regressor", "Linear Regression", "Support Vector Machine"]
+        )
+        
+        # Initialize the selected model
+        if model_choice == "Random Forest Regressor":
+            model = RandomForestRegressor(n_estimators=100, random_state=42)
+        elif model_choice == "Linear Regression":
+            from sklearn.linear_model import LinearRegression
+            model = LinearRegression()
+        elif model_choice == "Support Vector Machine":
+            from sklearn.svm import SVR
+            model = SVR()
+        
+        # Train the model
+        model.fit(X_train_scaled, y_train)
+        y_pred = model.predict(X_test_scaled)
+        
+        # Evaluation metrics
+        st.subheader("Evaluation Metrics")
+        mse = mean_squared_error(y_test, y_pred)
+        mae = mean_absolute_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Mean Squared Error", f"{mse:.4f}")
+        with col2:
+            st.metric("Mean Absolute Error", f"{mae:.4f}")
+        with col3:
+            st.metric("R² Score", f"{r2:.4f}")
+        
+        # Visualize predictions vs. actuals
+        st.subheader("Predictions vs. Actuals")
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.scatter(y_test, y_pred, alpha=0.7, edgecolors='k')
+        ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--', lw=2)
+        ax.set_xlabel("Actual Values")
+        ax.set_ylabel("Predicted Values")
+        ax.set_title("Predicted vs. Actual Values")
+        st.pyplot(fig)
+        
+        # Residual analysis
+        st.subheader("Residual Analysis")
+        residuals = y_test - y_pred
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.histplot(residuals, kde=True, ax=ax, color='blue')
+        ax.set_title("Residual Distribution")
+        ax.set_xlabel("Residuals")
+        st.pyplot(fig)
+        
+        # Precision, Recall, and F1-Score (if classification is applicable)
+        if model_choice == "Support Vector Machine":
+            y_test_class = np.where(y_test > y_test.mean(), 1, 0)
+            y_pred_class = np.where(y_pred > y_test.mean(), 1, 0)
+            precision = precision_score(y_test_class, y_pred_class)
+            recall = recall_score(y_test_class, y_pred_class)
+            f1 = f1_score(y_test_class, y_pred_class)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Precision", f"{precision:.4f}")
+            with col2:
+                st.metric("Recall", f"{recall:.4f}")
+            with col3:
+                st.metric("F1-Score", f"{f1:.4f}")
+            
+            # Confusion matrix
+            st.subheader("Confusion Matrix")
+            cm = confusion_matrix(y_test_class, y_pred_class)
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=["Class 0", "Class 1"], yticklabels=["Class 0", "Class 1"])
+            plt.title("Confusion Matrix")
+            plt.xlabel("Predicted")
+            plt.ylabel("Actual")
+            st.pyplot(plt)
+        
+        st.info("""
+        💡 **Tip**: Use the visualizations and metrics to understand your model's performance 
+        and identify areas for improvement.
+        """)
     
     def conclusion_page(self):
         """
@@ -487,6 +598,7 @@ class ModelingSimulationApp:
             "📊 Exploratory Analysis": self.exploratory_analysis_page,
             "🤖 Modeling": self.modeling_page,
             "🔮 Simulation": self.simulation_page,
+            "📊 Evaluation": self.evaluate_model_performance,
             "🏁 Conclusion": self.conclusion_page
         }
         
